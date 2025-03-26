@@ -20,14 +20,9 @@ package quick
 import (
 	"bytes"
 	"context"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -183,10 +178,10 @@ func loadFileConfigEtcd(filename string, clnt *etcd.Client, v interface{}) error
 // extension is provided, json will be selected by default.
 func loadFileConfig(filename string, v interface{}) error {
 	// sobug 解密
-	if err := DecryptFile(filename); err != nil {
-		log.Panicln("decryptFile the alias config file error.", err)
-	}
-	defer EncryptFile(filename) // 重新加密
+	// if err := DecryptFile(filename); err != nil {
+	// 	log.Panicln("decryptFile the alias config file error.", err)
+	// }
+	// defer EncryptFile(filename) // 重新加密
 
 	fileData, err := ioutil.ReadFile(filename)
 	if err != nil {
@@ -200,110 +195,110 @@ func loadFileConfig(filename string, v interface{}) error {
 	return toUnmarshaller(filepath.Ext(filename))(fileData, v)
 }
 
-var encryptionKey = []byte("d7#kL9!mQ2pZ$5vR")
+// var encryptionKey = []byte("d7#kL9!mQ2pZ$5vR")
 
-// 密钥派生函数（增强安全性）
-func deriveKey(rawKey []byte) []byte {
-	hash := sha256.Sum256(rawKey)
-	return hash[:16] // 使用前16字节作为AES-128密钥
-}
+// // 密钥派生函数（增强安全性）
+// func deriveKey(rawKey []byte) []byte {
+// 	hash := sha256.Sum256(rawKey)
+// 	return hash[:16] // 使用前16字节作为AES-128密钥
+// }
 
-// 定义加密文件头标识（4字节魔数 + 1字节版本号）
-const (
-	magicNumber = "ENC"                // 3字节固定标识
-	currentVer  = 0x01                 // 1字节版本号
-	headerSize  = len(magicNumber) + 1 // 总头长度=4字节
-)
+// // 定义加密文件头标识（4字节魔数 + 1字节版本号）
+// const (
+// 	magicNumber = "ENC"                // 3字节固定标识
+// 	currentVer  = 0x01                 // 1字节版本号
+// 	headerSize  = len(magicNumber) + 1 // 总头长度=4字节
+// )
 
-func EncryptFile(filePath string) error {
-	// 1. 预检文件状态
-	existing, err := os.ReadFile(filePath)
-	if err != nil {
-		return fmt.Errorf("读取文件失败: %w", err)
-	}
+// func EncryptFile(filePath string) error {
+// 	// 1. 预检文件状态
+// 	existing, err := os.ReadFile(filePath)
+// 	if err != nil {
+// 		return fmt.Errorf("读取文件失败: %w", err)
+// 	}
 
-	// 2. 检查是否已加密
-	if len(existing) >= headerSize &&
-		string(existing[0:3]) == magicNumber {
-		return nil // 已加密文件直接跳过
-	}
+// 	// 2. 检查是否已加密
+// 	if len(existing) >= headerSize &&
+// 		string(existing[0:3]) == magicNumber {
+// 		return nil // 已加密文件直接跳过
+// 	}
 
-	// 3. 执行加密流程
-	block, _ := aes.NewCipher(deriveKey(encryptionKey))
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return fmt.Errorf("创建GCM失败: %w", err)
-	}
+// 	// 3. 执行加密流程
+// 	block, _ := aes.NewCipher(deriveKey(encryptionKey))
+// 	gcm, err := cipher.NewGCM(block)
+// 	if err != nil {
+// 		return fmt.Errorf("创建GCM失败: %w", err)
+// 	}
 
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err = rand.Read(nonce); err != nil {
-		return fmt.Errorf("生成随机数失败: %w", err)
-	}
+// 	nonce := make([]byte, gcm.NonceSize())
+// 	if _, err = rand.Read(nonce); err != nil {
+// 		return fmt.Errorf("生成随机数失败: %w", err)
+// 	}
 
-	ciphertext := gcm.Seal(nil, nonce, existing, nil)
+// 	ciphertext := gcm.Seal(nil, nonce, existing, nil)
 
-	// 4. 构建带标识的加密文件
-	header := make([]byte, headerSize)
-	copy(header[0:3], magicNumber)
-	header[3] = currentVer
+// 	// 4. 构建带标识的加密文件
+// 	header := make([]byte, headerSize)
+// 	copy(header[0:3], magicNumber)
+// 	header[3] = currentVer
 
-	finalData := append(header, nonce...)
-	finalData = append(finalData, ciphertext...)
+// 	finalData := append(header, nonce...)
+// 	finalData = append(finalData, ciphertext...)
 
-	// 5. 原子写入（避免写入中途失败导致文件损坏）
-	tmpPath := filePath + ".tmp"
-	if err := os.WriteFile(tmpPath, finalData, 0644); err != nil {
-		return fmt.Errorf("写入临时文件失败: %w", err)
-	}
-	return os.Rename(tmpPath, filePath)
-}
+// 	// 5. 原子写入（避免写入中途失败导致文件损坏）
+// 	tmpPath := filePath + ".tmp"
+// 	if err := os.WriteFile(tmpPath, finalData, 0644); err != nil {
+// 		return fmt.Errorf("写入临时文件失败: %w", err)
+// 	}
+// 	return os.Rename(tmpPath, filePath)
+// }
 
-func DecryptFile(filePath string) error {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Printf("解密过程发生panic：%v", r)
-		}
-	}()
+// func DecryptFile(filePath string) error {
+// 	defer func() {
+// 		if r := recover(); r != nil {
+// 			log.Printf("解密过程发生panic：%v", r)
+// 		}
+// 	}()
 
-	ciphertext, err := os.ReadFile(filePath)
-	if err != nil {
-		return fmt.Errorf("读取文件失败: %w", err)
-	}
+// 	ciphertext, err := os.ReadFile(filePath)
+// 	if err != nil {
+// 		return fmt.Errorf("读取文件失败: %w", err)
+// 	}
 
-	// 1. 基础长度校验
-	if len(ciphertext) < headerSize {
-		return nil // 非加密文件直接跳过
-	}
+// 	// 1. 基础长度校验
+// 	if len(ciphertext) < headerSize {
+// 		return nil // 非加密文件直接跳过
+// 	}
 
-	// 2. 验证加密标识
-	header := ciphertext[0:headerSize]
-	if string(header[0:3]) != magicNumber {
-		return nil // 非加密文件静默跳过
-	}
+// 	// 2. 验证加密标识
+// 	header := ciphertext[0:headerSize]
+// 	if string(header[0:3]) != magicNumber {
+// 		return nil // 非加密文件静默跳过
+// 	}
 
-	// 3. 提取加密参数
-	nonceSize := 12 // GCM标准Nonce长度
-	payload := ciphertext[headerSize:]
-	if len(payload) < nonceSize {
-		return fmt.Errorf("文件损坏：无效长度")
-	}
+// 	// 3. 提取加密参数
+// 	nonceSize := 12 // GCM标准Nonce长度
+// 	payload := ciphertext[headerSize:]
+// 	if len(payload) < nonceSize {
+// 		return fmt.Errorf("文件损坏：无效长度")
+// 	}
 
-	nonce := payload[0:nonceSize]
-	ciphertext = payload[nonceSize:]
+// 	nonce := payload[0:nonceSize]
+// 	ciphertext = payload[nonceSize:]
 
-	// 4. 执行解密
-	block, _ := aes.NewCipher(deriveKey(encryptionKey))
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return fmt.Errorf("创建GCM失败: %w", err)
-	}
+// 	// 4. 执行解密
+// 	block, _ := aes.NewCipher(deriveKey(encryptionKey))
+// 	gcm, err := cipher.NewGCM(block)
+// 	if err != nil {
+// 		return fmt.Errorf("创建GCM失败: %w", err)
+// 	}
 
-	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
-	if err != nil {
-		return fmt.Errorf("解密失败: %w", err)
-	}
+// 	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+// 	if err != nil {
+// 		return fmt.Errorf("解密失败: %w", err)
+// 	}
 
-	// 5. 安全写入（保持原权限）
-	fi, _ := os.Stat(filePath)
-	return os.WriteFile(filePath, plaintext, fi.Mode().Perm())
-}
+// 	// 5. 安全写入（保持原权限）
+// 	fi, _ := os.Stat(filePath)
+// 	return os.WriteFile(filePath, plaintext, fi.Mode().Perm())
+// }
